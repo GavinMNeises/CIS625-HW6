@@ -1,4 +1,3 @@
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -9,15 +8,23 @@ int numOfNumbers = 20;
 
 //Method to generate random numbers
 int* RandomNumberGeneration(){
-
+	int i = 0;
+	int* randomNumberArray;
+	randomNumberArray = (int *) malloc(sizeof(int) * numOfNumbers);
+	
+	for(i = 0; i < numOfNumbers; i++){
+		randomNumberArray[i] = (int)(100 * (rand()/(double)RAND_MAX));
+	}
+	
+	return randomNumberArray;
 }
 
 void main(int argc, char *argv){
         int rc, numTasks, rank;
 
         //Generate random numbers
-        randomNumbers = RandomNumberGeneration();
-
+        int* randomNumbers = RandomNumberGeneration();
+		
         //Check rc
         rc = MPI_Init(&argc, &argv);
         if(rc != MPI_SUCCESS){
@@ -53,5 +60,7 @@ void main(int argc, char *argv){
                 float stddev = sqrt(globalSquared / (numOfNumbers * NUM_THREADS));
                 printf("Mean: %f, Standard Deviation: %f\n", mean, stddev);
         }
+		
+		free(randomNumbers);
 }
 
