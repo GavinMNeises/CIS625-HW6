@@ -1,0 +1,141 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include <mpi.h>
+#include <math.h>
+
+int world_rank;
+int world_size;
+int *totalArray;
+int totalMean;
+int totalDifferenceSum = 0;
+
+void printArray(int *array, int size){
+    int i;
+    for(i = 0; i < size; i++){
+        printf("%d\n", array[i]);
+    }
+}
+
+int* sumArray(int *array, int size){
+    int sum, i;
+    for(i = 0; i < size; i++){
+        if(i == 0){
+            sum = array[i];
+        }
+        else{
+            sum += array[i];
+        }
+    }
+}
+
+double sumDifference(int *array, int size, double totalMean){
+    int i;
+    double sumDifference;
+    for(i = 0; i < size; i++){
+        double differenceSquared;
+        differenceSquared = (array[i] - totalMean) * (array[i] - totalMean);
+        if(i == 0){
+            sumDifference = differenceSquared;
+        }
+        else{
+            sumDifference += differenceSquared;
+        }
+    }
+    return sumDifference;
+}
+
+int randomNumber(int max, int min){
+    int n;
+    n = rand() / RAND_MAX;
+    return min + n * (max - min);
+}
+
+void Control(int size){
+    int i, sizeForNodes, sum, mean, totalAverage, diffSum;
+    
+    double standardDeviation;
+
+    //Fill the global array with random numbers between 0 and 50
+    srand(1);
+    //totalArray = new int[size];
+    for(i = 0; i < size; i++){
+        totalArray[i] = randomNumber(0, 50);
+    }    
+
+    sizeForNodes = size / world_size;
+    int *partition[sizeForNodes];
+    
+    MPI_Bcast(sizeForNodes, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Scatter(totalArray, sizeForNodes, MPI_INT, partition, sizeForNodes, MPI_INT, 0, MPI_COMM_WORLD);
+
+    sum = sumArray(partition, sizeForNodes);
+    mean = sum / sizeForNodes;
+
+    MPI_Reduce(&mean, &totalMean, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    totalAverage = totalMean / world_size;
+
+    MPI_Bcast(&totalAverage, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    diffSum = sumDifference(partition, sizeForNodes, totalAverage);
+    MPI_Reduce(&diffSum, &totalDifferenceSum, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    standardDeviation = sqrt(totalDifferenceSum/size);
+
+    printf("Total mean: %d, Standard Deviation: %d", totalMean, standardDeviation);
+}
+
+void Participant(){
+    int size = 0, sum, mean, diffSum, totalAverage;
+    int *partition[size];
+
+    MPI_Bcast(&size, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    MPI_Scatter(totalArray, size, MPI_INT, partition, size, MPI_INT, 0, MPI_COMM_WORLD);
+
+    sum = sumArray(partition, size);
+    mean = sum / size;
+
+    MPI_Reduce(&mean, &totalMean, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    totalAverage = 0;
+    MPI_Bcast(&totalAverage, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    diffSum = sumDifference(partition, size, totalAverage);
+
+    MPI_Reduce(&diffSum, &totalDifferenceSum, 1, MPI_LONG_LONG_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+}
+
+void main(int argc, char** argv){
+    int arraySize = 0;
+
+    MPI_Init(NULL, NULL);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+    scanf(argv[1], "%d", &arraySize);
+
+    if(arraySize == 0){
+        arraySize = 120;
+    } 
+
+    if(!(arraySize % world_size == 0)){
+        if(world_rank == 0){
+            printf("Error");
+        }
+        MPI_Finalize();
+        return 0;
+    }
+
+    if(world_rank == 0){
+        Control(arraySize);
+    }
+    else
+    {
+        Participant();
+    }
+
+    MPI_Finalize();
+    return 0;
+}
